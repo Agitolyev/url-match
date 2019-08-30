@@ -35,7 +35,7 @@
   "Queryparam component parser"
   [queryparam-pattern]
   (let [query-param-def (split queryparam-pattern #"=")]
-    {:queryparam {(keyword (get query-param-def 0)) (second query-param-def)}}))
+    {:queryparam {(keyword (first query-param-def)) (second query-param-def)}}))
 
 (defn parse-component
   "Component pattern parser factory"
@@ -94,8 +94,8 @@
   (defn get-path-binds
     [pattern, actual]
     (map (fn [bind]
-           [(keyword (subs (get bind 0) 1)), (get bind 1)]) (filter (fn [element]
-                                                                      (starts-with? (get element 0) "?")) (map vector pattern actual))))
+           [(keyword (subs (first bind) 1)), (second bind)]) (filter (fn [element]
+                                                                      (starts-with? (first element) "?")) (map vector pattern actual))))
   (defn get-queryparams-binds
     [pattern, actual]
     (select-keys actual (keys pattern)))
