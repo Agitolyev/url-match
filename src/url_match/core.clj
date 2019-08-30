@@ -6,14 +6,26 @@
   [original-str, start-m-group, end-m-group]
   (get (re-find (re-pattern (str start-m-group "(.*)" end-m-group)) original-str) 2))
 
+(defn second [arr]
+  "Returns second elem of given array if present, otherwise nil"
+  (if (>= (count arr) 2)
+    (get arr 1)
+    nil))
+
 (defn split-first [s re]
   (split s re 2))
 
-(defn bypassing-nil
-  [f arg1 arg2]
-  (if (nil? arg1)
-    nil
-    (f arg1 arg2)))
+(defn flip [f]
+  "Wraps given function to accept args in reverse order"
+  (fn [& args]
+    (apply f (clojure.core/reverse args))))
+
+(defn bypassing-nil [f]
+  "Wraps given function to bypass nil if all params are nil"
+  (fn [& args]
+    (if (every? identity (map nil? args))
+      nil
+      (apply f args))))
 
 (defn host-component-parser
   "Host component parser"
@@ -28,34 +40,28 @@
 (defn queryparam-component-parser
   "Queryparam component parser"
   [queryparam-pattern]
-  (def query-param-def (split queryparam-pattern #"="))
-  {:queryparam {(keyword (get query-param-def 0)) (get query-param-def 1)}})
+  (let [query-param-def (split queryparam-pattern #"=")]
+    {:queryparam {(keyword (get query-param-def 0)) (second query-param-def)}}))
 
 (defn parse-component
   "Component pattern parser factory"
   [component-pattern]
-  (defn get-string-between
-    "Returns substring of original string between given match groups"
-    [original-str, start-m-group, end-m-group]
-    (get (re-find (re-pattern (str start-m-group "(.*)" end-m-group)) original-str) 2))
-
-  (def component-prefix (get (split component-pattern #"\(") 0))
-
-  (case component-prefix
-    "host" (host-component-parser (get-string-between component-pattern "(host\\()" "(\\);)"))
-    "path" (path-component-parser (get-string-between component-pattern "(path\\()" "(\\);)"))
-    "queryparam" (queryparam-component-parser (get-string-between component-pattern "(queryparam\\()" "(\\);)"))))
+  (let [component-prefix (first (split component-pattern #"\("))]
+    (case component-prefix
+      "host" (host-component-parser (get-string-between component-pattern "(host\\()" "(\\);)"))
+      "path" (path-component-parser (get-string-between component-pattern "(path\\()" "(\\);)"))
+      "queryparam" (queryparam-component-parser (get-string-between component-pattern "(queryparam\\()" "(\\);)")))))
 
 (defn parse-url
   [url]
-  (def schemaless-url (get (split url #"//") 1))
-  (def url-by-components (split schemaless-url #"\?"))
-  (def host-path (split-first (get url-by-components 0) #"/"))
-  (def queryparams (apply merge-with merge (map queryparam-component-parser (bypassing-nil split (get url-by-components 1) #"\&"))))
-  (def host (host-component-parser (get host-path 0)))
-  (def path (path-component-parser (get host-path 1)))
-
-  (merge queryparams host path))
+  (let [url-by-components (split (second (split url #"//")) #"\?")]
+    (let [host-path (split-first (first url-by-components) #"/")
+          queryparams (apply merge-with merge
+                             (map queryparam-component-parser
+                                  ((bypassing-nil (partial (flip split) #"\&")) (second url-by-components))))]
+      (merge queryparams
+             (host-component-parser (first host-path))
+             (path-component-parser (second host-path))))))
 
 (defn validate
   [parsed-pattern, parsed-url]
@@ -72,19 +78,25 @@
   (defn host-valid?
     [pattern, actual]
     (= pattern actual))
+
   (defn path-valid?
     [pattern, actual]
     (and (== (count pattern) (count actual)) (path-matches? pattern actual)))
+
   (defn queryparams-valid?
     [pattern, actual]
     (every? actual (keys pattern)))
-  (def validators {:host host-valid? :path path-valid? :queryparam queryparams-valid?})
-  (every? true? (map (fn [key]
-                       ((key validators) (key parsed-pattern) (key parsed-url)))
-                     (keys parsed-pattern))))
+
+  (let [validators {:host       host-valid?
+                    :path       path-valid?
+                    :queryparam queryparams-valid?}]
+    (every? true? (map
+                    (fn [key] ((get validators key) (get parsed-pattern key) (get parsed-url key)))
+                    (keys parsed-pattern)))))
 
 (defn construct-binds
   [parsed-pattern, parsed-url]
+
   (defn get-path-binds
     [pattern, actual]
     (map (fn [bind]
@@ -93,10 +105,11 @@
   (defn get-queryparams-binds
     [pattern, actual]
     (select-keys actual (keys pattern)))
-  (def binds-extractors {:path get-path-binds :queryparam get-queryparams-binds})
-  (mapcat (fn [key]
-            ((key binds-extractors) (key parsed-pattern) (key parsed-url)))
-          (keys binds-extractors)))
+
+  (let [binds-extractors {:path       get-path-binds
+                          :queryparam get-queryparams-binds}]
+    (mapcat (fn [key] ((get binds-extractors key) (get parsed-pattern key) (get parsed-url key)))
+            (keys binds-extractors))))
 
 (defn new-pattern
   "Transforms pattern string to a map."
@@ -106,10 +119,9 @@
 (defn recognize
   "Recognizes the given url by pattern"
   [pattern, url]
-  (def parsed-url (parse-url url))
-
-  (if (validate pattern parsed-url)
-    (construct-binds pattern parsed-url)))
+  (let [parsed-url (parse-url url)]
+    (if (validate pattern parsed-url)
+      (construct-binds pattern parsed-url))))
 
 (defn -main []
   (def twitter (new-pattern "host(twitter.com); path(?user/status/?id);"))
