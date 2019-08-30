@@ -6,12 +6,6 @@
   [original-str, start-m-group, end-m-group]
   (get (re-find (re-pattern (str start-m-group "(.*)" end-m-group)) original-str) 2))
 
-(defn second [arr]
-  "Returns second elem of given array if present, otherwise nil"
-  (if (>= (count arr) 2)
-    (get arr 1)
-    nil))
-
 (defn split-first [s re]
   (split s re 2))
 
