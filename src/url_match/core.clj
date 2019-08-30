@@ -85,8 +85,8 @@
                     :path       path-valid?
                     :queryparam queryparams-valid?}]
     (every? true? (map
-                    (fn [key] ((get validators key) (get parsed-pattern key) (get parsed-url key)))
-                    (keys parsed-pattern)))))
+                   (fn [key] ((get validators key) (get parsed-pattern key) (get parsed-url key)))
+                   (keys parsed-pattern)))))
 
 (defn construct-binds
   [parsed-pattern, parsed-url]
