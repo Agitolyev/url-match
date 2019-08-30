@@ -93,16 +93,17 @@
 
   (defn get-path-binds
     [pattern, actual]
-    (map (fn [bind]
-           [(keyword (subs (first bind) 1)), (second bind)]) (filter (fn [element]
-                                                                      (starts-with? (first element) "?")) (map vector pattern actual))))
+    (map (fn [bind] [(keyword (subs (first bind) 1)), (second bind)])
+         (filter (fn [element] (starts-with? (first element) "?"))
+                 (map vector pattern actual))))
   (defn get-queryparams-binds
     [pattern, actual]
     (select-keys actual (keys pattern)))
 
   (let [binds-extractors {:path       get-path-binds
                           :queryparam get-queryparams-binds}]
-    (mapcat (fn [key] ((get binds-extractors key) (get parsed-pattern key) (get parsed-url key)))
+    (mapcat (fn [key] (let [bind-extractor (get binds-extractors key)]
+                        (bind-extractor (get parsed-pattern key) (get parsed-url key))))
             (keys binds-extractors))))
 
 (defn new-pattern
